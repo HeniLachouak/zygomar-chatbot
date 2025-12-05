@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Professeur Zygomar 🤯</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        display: flex;
+        height: 100vh;
+        background: #fdf6e3;
+      }
+      .container {
+        display: flex;
+        width: 100%;
+      }
+      .left-panel {
+        width: 35%;
+        background: #fffaf0;
+        border-right: 2px solid #f5deb3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .avatar-img {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        margin-bottom: 20px;
+        object-fit: cover;
+        border: 3px solid #ff6f61;
+      }
+      #recordBtn {
+        font-size: 30px;
+        background: #ff6f61;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        cursor: pointer;
+      }
+      #recordBtn:hover {
+        background: #e55b50;
+      }
+      .right-panel {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .chat-header {
+        background: #ff6f61;
+        color: white;
+        padding: 18px;
+        font-size: 20px;
+        font-weight: bold;
+        text-align: center;
+      }
+      .chat-box {
+        flex-grow: 1;
+        padding: 18px;
+        overflow-y: auto;
+      }
+      .message {
+        max-width: 80%;
+        margin-bottom: 15px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        line-height: 1.4;
+        font-size: 15px;
+        word-wrap: break-word;
+        display: flex;
+        align-items: flex-start;
+      }
+      .message.user {
+        background: #ff6f61;
+        color: white;
+        margin-left: auto;
+      }
+      .message.bot {
+        background: #fff0f5;
+        color: #222;
+      }
+      .avatar {
+        margin-right: 8px;
+        font-size: 24px;
+      }
+      .input-area {
+        display: flex;
+        padding: 12px;
+        border-top: 2px solid #f5deb3;
+        background: #fffaf0;
+      }
+      .input-area input {
+        flex-grow: 1;
+        border: 2px solid #deb887;
+        padding: 12px;
+        border-radius: 10px;
+        outline: none;
+        font-size: 15px;
+      }
+      .input-area button {
+        background: #ff6f61;
+        border: none;
+        color: white;
+        margin-left: 10px;
+        padding: 0 20px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 15px;
+      }
+      .input-area button:hover {
+        background: #e55b50;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="left-panel">
+        <img src="/static/avatar.png" alt="avatar" class="avatar-img" />
+        <button id="recordBtn">🎤</button>
+        <p id="status">Appuyez pour parler</p>
+      </div>
+
+      <div class="right-panel">
+        <div class="chat-header">Professeur Zygomar 🤯</div>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="input-area">
+          <input
+            id="messageInput"
+            type="text"
+            placeholder="Écris un message..."
+          />
+          <button id="sendBtn">Envoyer</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const chatBox = document.getElementById("chatBox");
+      const messageInput = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+
+      function addMessage(text, sender) {
+        const msg = document.createElement("div");
+        msg.classList.add("message", sender);
+        if (sender === "bot")
+          msg.innerHTML = `<span class="avatar">🧐</span><span class="content">${text}</span>`;
+        else msg.textContent = text;
+        chatBox.appendChild(msg);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+
+      async function sendMessage(text) {
+        if (!text) return;
+        addMessage(text, "user");
+        messageInput.value = "";
+        try {
+          const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: "user1", user_message: text }),
+          });
+          const result = await response.json();
+          if (result.reply) {
+            addMessage(result.reply, "bot");
+            speak(result.reply);
+          } else addMessage("❌ Erreur serveur", "bot");
+        } catch (err) {
+          addMessage("❌ Impossible de contacter le serveur", "bot");
+        }
+      }
+
+      sendBtn.onclick = () => sendMessage(messageInput.value);
+      messageInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendMessage(messageInput.value);
+      });
+
+      function speak(text) {
+        if ("speechSynthesis" in window) {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.lang = "fr-FR";
+          window.speechSynthesis.speak(utter);
+        }
+      }
+
+      /* Voice recording & transcription */
+      let mediaRecorder,
+        audioChunks = [];
+      const recordBtn = document.getElementById("recordBtn");
+      const status = document.getElementById("status");
+
+      recordBtn.onclick = async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+          recordBtn.textContent = "🎤";
+          status.textContent = "Appuyez pour parler";
+        } else {
+          if (navigator.mediaDevices) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+              audioChunks.push(e.data);
+            };
+            mediaRecorder.onstop = async () => {
+              const blob = new Blob(audioChunks, { type: "audio/webm" });
+              const file = new File([blob], "voice.webm");
+
+              const formData = new FormData();
+              formData.append("audio_file", file);
+
+              try {
+                const resp = await fetch("/transcribe", {
+                  method: "POST",
+                  body: formData,
+                });
+                const data = await resp.json();
+                const transcribedText =
+                  data.transcription || "❌ impossible de transcrire";
+                messageInput.value = transcribedText;
+                sendMessage(transcribedText);
+              } catch (err) {
+                messageInput.value = "❌ impossible de transcrire";
+                sendMessage("❌ impossible de transcrire");
+              }
+            };
+
+            mediaRecorder.start();
+            recordBtn.textContent = "⏹";
+            status.textContent = "Enregistrement...";
+          }
+        }
+      };
+    </script>
+  </body>
+</html>
